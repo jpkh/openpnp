@@ -700,6 +700,58 @@ public class Configuration extends AbstractModelObject {
         firePropertyChange("parts", null, parts);
     }
 
+    /**
+     * Moves the given parts by the given delta (usually -1 or +1) in the
+     * configuration order. Used by the Parts panel Move Up / Move Down actions.
+     * The order is persisted to parts.xml when the configuration is saved.
+     */
+    public void moveParts(List<Part> partsToMove, int delta) {
+        moveInMap(parts, partsToMove, delta);
+        firePropertyChange("parts", null, parts);
+    }
+
+    /**
+     * Moves the given packages by the given delta (usually -1 or +1) in the
+     * configuration order. Used by the Packages panel Move Up / Move Down actions.
+     * The order is persisted to packages.xml when the configuration is saved.
+     */
+    public void movePackages(List<Package> packagesToMove, int delta) {
+        moveInMap(packages, packagesToMove, delta);
+        firePropertyChange("packages", null, packages);
+    }
+
+    /**
+     * Moves a contiguous block of entries inside an ordered map by the given
+     * delta. The map is rebuilt in the new order so that iteration (and
+     * therefore XML serialization) reflects it.
+     */
+    private <E extends Identifiable> void moveInMap(LinkedHashMap<String, E> map,
+            List<E> block, int delta) {
+        List<E> values = new ArrayList<>(map.values());
+        int min = values.size();
+        int max = -1;
+        for (E item : block) {
+            int idx = values.indexOf(item);
+            if (idx >= 0) {
+                min = Math.min(min, idx);
+                max = Math.max(max, idx);
+            }
+        }
+        if (max < 0) {
+            return;
+        }
+        if ((delta < 0 && min <= 0) || (delta > 0 && max >= values.size() - 1)) {
+            return;
+        }
+        List<E> moved = new ArrayList<>(values.subList(min, max + 1));
+        values.subList(min, max + 1).clear();
+        values.addAll(min + delta, moved);
+        map.clear();
+        for (E value : values) {
+            map.put(value.getId().toUpperCase(), value);
+        }
+    }
+
     public void addVisionSettings(AbstractVisionSettings visionSettings) {
         if (null == visionSettings.getId()) {
             throw new Error("Vision Settings with null Id cannot be added to Configuration.");

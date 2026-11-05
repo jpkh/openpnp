@@ -29,6 +29,8 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -44,6 +46,7 @@ import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -53,6 +56,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.event.DocumentEvent;
@@ -231,10 +235,19 @@ public class PackagesPanel extends JPanel implements WizardContainer {
 
         table.setRowSorter(tableSorter);
         table.getTableHeader().setDefaultRenderer(new MultisortTableHeaderCellRenderer());
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.CTRL_DOWN_MASK), "moveUp");
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.CTRL_DOWN_MASK), "moveDown");
+        table.getActionMap().put("moveUp", moveUpAction);
+        table.getActionMap().put("moveDown", moveDownAction);
 
         splitPane.setLeftComponent(new JScrollPane(table));
         splitPane.setRightComponent(tabbedPane);
 
+        toolBar.add(moveUpAction);
+        toolBar.add(moveDownAction);
+        toolBar.addSeparator();
         toolBar.add(newPackageAction);
         toolBar.add(deletePackageAction);
         toolBar.addSeparator();
@@ -444,6 +457,57 @@ public class PackagesPanel extends JPanel implements WizardContainer {
             }
         }
     };
+
+    public final Action moveUpAction = new AbstractAction() {
+        {
+            putValue(SMALL_ICON, Icons.arrowUp);
+            putValue(NAME, Translations.getString("PackagesPanel.Action.MoveUp")); //$NON-NLS-1$
+            putValue(SHORT_DESCRIPTION, Translations.getString("PackagesPanel.Action.MoveUp.Description")); //$NON-NLS-1$
+            setEnabled(false);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent arg0) {
+            moveSelection(-1);
+        }
+    };
+
+    public final Action moveDownAction = new AbstractAction() {
+        {
+            putValue(SMALL_ICON, Icons.arrowDown);
+            putValue(NAME, Translations.getString("PackagesPanel.Action.MoveDown")); //$NON-NLS-1$
+            putValue(SHORT_DESCRIPTION, Translations.getString("PackagesPanel.Action.MoveDown.Description")); //$NON-NLS-1$
+            setEnabled(false);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent arg0) {
+            moveSelection(1);
+        }
+    };
+
+    /**
+     * Moves the selected packages by the given delta in the configuration order.
+     * The selection is restored after the move.
+     */
+    private void moveSelection(int delta) {
+        List<Package> selections = getSelections();
+        if (selections.isEmpty()) {
+            return;
+        }
+        Configuration.get().movePackages(selections, delta);
+        tableModel.fireTableDataChanged();
+        table.clearSelection();
+        for (Package pkg : selections) {
+            int row = tableModel.indexOf(pkg);
+            if (row >= 0) {
+                int viewRow = table.convertRowIndexToView(row);
+                if (viewRow >= 0) {
+                    table.addRowSelectionInterval(viewRow, viewRow);
+                }
+            }
+        }
+    }
     private int selectedTab;
 
     @Override
@@ -463,6 +527,9 @@ public class PackagesPanel extends JPanel implements WizardContainer {
             multiSelectionActionGroup.setEnabled(false);
             singleSelectionActionGroup.setEnabled(!selections.isEmpty());
         }
+        boolean hasSelection = !selections.isEmpty();
+        moveUpAction.setEnabled(hasSelection);
+        moveDownAction.setEnabled(hasSelection);
 
         Package selectedPackage = getSelectedPackage();
         if (selectedPackage != null) {

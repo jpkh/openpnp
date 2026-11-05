@@ -216,6 +216,15 @@ public class PartsTableModel extends AbstractObjectTableModel implements Propert
             List<int[]> indicesToAdd = new ArrayList<>();
             Collect.computeInPlaceUpdateIndices(parts, newParts, indicesToRemove, indicesToAdd);
 
+            if (indicesToRemove.isEmpty() && indicesToAdd.isEmpty() && !parts.equals(newParts)) {
+                // The same parts are present, just reordered (e.g., Move Up / Move Down
+                // in the Parts panel). The in-place update logic only handles additions
+                // and removals, so rebuild the list to reflect the new order.
+                parts = new ArrayList<>(newParts);
+                fireTableDataChanged();
+                return;
+            }
+
             //Remove the unneeded parts in reverse order so as to not disturb indices of those 
             //parts that are yet to be removed
             for (int[] idxRange : indicesToRemove) {

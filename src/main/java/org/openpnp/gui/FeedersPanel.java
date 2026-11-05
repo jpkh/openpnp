@@ -23,6 +23,8 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
@@ -38,6 +40,7 @@ import javax.swing.Action;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JOptionPane;
@@ -49,6 +52,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.SwingUtilities;
@@ -86,6 +90,7 @@ import org.openpnp.model.Placement.Type;
 import org.openpnp.spi.Camera;
 import org.openpnp.spi.Feeder;
 import org.openpnp.spi.JobProcessor.JobProcessorException;
+import org.openpnp.spi.Machine;
 import org.openpnp.spi.Nozzle;
 import org.openpnp.spi.NozzleTip;
 import org.openpnp.spi.PartAlignment;
@@ -135,6 +140,10 @@ public class FeedersPanel extends JPanel implements WizardContainer {
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
         panel.add(toolBar, BorderLayout.CENTER);
+
+        toolBar.add(moveUpAction);
+        toolBar.add(moveDownAction);
+        toolBar.addSeparator();
 
         JButton btnNewFeeder = new JButton(newFeederAction);
         btnNewFeeder.setHideActionText(true);
@@ -246,6 +255,12 @@ public class FeedersPanel extends JPanel implements WizardContainer {
         splitPane.setLeftComponent(new JScrollPane(table));
         table.setRowSorter(tableSorter);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, InputEvent.CTRL_DOWN_MASK), "moveUp");
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, InputEvent.CTRL_DOWN_MASK), "moveDown");
+        table.getActionMap().put("moveUp", moveUpAction);
+        table.getActionMap().put("moveDown", moveDownAction);
 
         configurationPanel = new JTabbedPane(JTabbedPane.TOP);
         splitPane.setRightComponent(configurationPanel);
@@ -277,6 +292,9 @@ public class FeedersPanel extends JPanel implements WizardContainer {
                     singleSelectActionGroup.setEnabled(false);
                     multiSelectActionGroup.setEnabled(true);
                 }
+                boolean hasSelection = !selections.isEmpty();
+                moveUpAction.setEnabled(hasSelection);
+                moveDownAction.setEnabled(hasSelection);
 
                 if (table.getSelectedRow() != priorRowIndex) {
 
@@ -844,7 +862,90 @@ public class FeedersPanel extends JPanel implements WizardContainer {
             });
         }
     };
-    
+
+    public final Action moveUpAction = new AbstractAction() {
+        {
+            putValue(SMALL_ICON, Icons.arrowUp);
+            putValue(NAME, Translations.getString("FeedersPanel.Action.MoveUp")); //$NON-NLS-1$
+            putValue(SHORT_DESCRIPTION, Translations.getString("FeedersPanel.Action.MoveUp.Description")); //$NON-NLS-1$
+            setEnabled(false);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent arg0) {
+            moveSelection(-1);
+        }
+    };
+
+    public final Action moveDownAction = new AbstractAction() {
+        {
+            putValue(SMALL_ICON, Icons.arrowDown);
+            putValue(NAME, Translations.getString("FeedersPanel.Action.MoveDown")); //$NON-NLS-1$
+            putValue(SHORT_DESCRIPTION, Translations.getString("FeedersPanel.Action.MoveDown.Description")); //$NON-NLS-1$
+            setEnabled(false);
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent arg0) {
+            moveSelection(1);
+        }
+    };
+
+    /**
+     * Moves the selected feeders by the given delta in the machine feeder list
+     * order. The machine list is rebuilt through the Machine add/remove feeder
+     * API, so the new order is persisted to machine.xml on Save Configuration.
+     * The selection is restored after the move.
+     */
+    private void moveSelection(int delta) {
+        List<Feeder> selections = getSelections();
+        if (selections.isEmpty()) {
+            return;
+        }
+        try {
+            Machine machine = configuration.getMachine();
+            List<Feeder> all = new ArrayList<>(machine.getFeeders());
+            int min = all.size();
+            int max = -1;
+            for (Feeder feeder : selections) {
+                int idx = all.indexOf(feeder);
+                if (idx >= 0) {
+                    min = Math.min(min, idx);
+                    max = Math.max(max, idx);
+                }
+            }
+            if (max < 0) {
+                return;
+            }
+            if ((delta < 0 && min <= 0) || (delta > 0 && max >= all.size() - 1)) {
+                return;
+            }
+            List<Feeder> block = new ArrayList<>(all.subList(min, max + 1));
+            all.subList(min, max + 1).clear();
+            all.addAll(min + delta, block);
+            for (Feeder feeder : new ArrayList<>(machine.getFeeders())) {
+                machine.removeFeeder(feeder);
+            }
+            for (Feeder feeder : all) {
+                machine.addFeeder(feeder);
+            }
+            tableModel.refresh();
+            table.clearSelection();
+            for (Feeder feeder : selections) {
+                int row = tableModel.indexOf(feeder);
+                if (row >= 0) {
+                    int viewRow = table.convertRowIndexToView(row);
+                    if (viewRow >= 0) {
+                        table.addRowSelectionInterval(viewRow, viewRow);
+                    }
+                }
+            }
+        }
+        catch (Exception e) {
+            MessageBoxes.errorBox(getTopLevelAncestor(), "Move Failed", e);
+        }
+    }
+
     public final Action setEnabledAction = new AbstractAction() {
         {
             putValue(NAME, Translations.getString("FeedersPanel.Action.SetEnabled")); //$NON-NLS-1$
