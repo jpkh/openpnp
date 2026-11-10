@@ -40,6 +40,7 @@ a complete change list, only those that may directly interest or affect users.
 * Fix some vision pipeline stages that could be used to mask 100% of the image which were previously leaving a stray unmasked pixel. [PR1910](https://github.com/openpnp/openpnp/pull/1910)
 * Fix bugs handling tray feeders configured with fewer than 1 row or column. [PR1926](https://github.com/openpnp/openpnp/pull/1926)
 * On launch, check if the window is off screen and, if it is, move it to the system default position. [PR1931](https://github.com/openpnp/openpnp/pull/1931)
+* Fix ReferenceStripFeeder ignoring the feeder Z when vision is enabled - the nozzle picked at Z=0.0 instead of the configured pick height. [Issue 1937](https://github.com/openpnp/openpnp/issues/1937)
 
 # Version 2.4
 

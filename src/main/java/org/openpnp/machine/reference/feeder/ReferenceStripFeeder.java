@@ -344,6 +344,9 @@ public class ReferenceStripFeeder extends ReferenceFeeder {
         if (actualLocation == null) {
             throw new FeederEmptyException("Unable to locate reference hole. End of strip?");
         }
+        // Vision determines the sprocket-hole X/Y, but the detected location
+        // inherits the camera Z. Preserve the expected feeder Z.
+        actualLocation = actualLocation.derive(null, null, expectedLocation.getZ(), null);
         // make sure it's not too far away
         Length distance = actualLocation.getLinearLengthTo(expectedLocation)
                 .convertToUnits(LengthUnit.Millimeters);
