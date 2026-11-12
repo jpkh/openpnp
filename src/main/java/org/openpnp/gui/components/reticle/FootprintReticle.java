@@ -33,10 +33,24 @@ import org.openpnp.model.LengthUnit;
 public class FootprintReticle implements Reticle {
     private Color color;
     private Footprint footprint;
+    private double placementRotation = 0;
 
     public FootprintReticle(Footprint footprint) {
         this.footprint = footprint;
         this.color = Color.yellow;
+    }
+
+    /**
+     * Additional rotation applied on top of the camera rotation, e.g. the rotation of the
+     * selected job placement, so the drawn footprint matches the component orientation on the
+     * PCB.
+     */
+    public double getPlacementRotation() {
+        return placementRotation;
+    }
+
+    public void setPlacementRotation(double placementRotation) {
+        this.placementRotation = placementRotation;
     }
 
     @Override
@@ -63,7 +77,9 @@ public class FootprintReticle implements Reticle {
 
         tx.translate(viewPortCenterX, viewPortCenterY);
         // Left-hand coordinate system rotates positive clockwise, so we invert the value.
-        tx.rotate(Math.toRadians(-rotation));
+        // The placement rotation is applied on top of the camera rotation, so the drawn
+        // footprint matches the component orientation on the PCB.
+        tx.rotate(Math.toRadians(-(rotation + placementRotation)));
 
         // First we scale by units to convert the units and then we divide
         // by the camera X and Y units per pixels to get pixel locations.

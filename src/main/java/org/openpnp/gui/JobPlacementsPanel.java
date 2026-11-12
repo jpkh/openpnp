@@ -512,6 +512,10 @@ public class JobPlacementsPanel extends JPanel {
         updateActivePlacements();
     }
 
+    public PlacementsHolderLocation<?> getBoardOrPanelLocation() {
+        return boardOrPanelLocation;
+    }
+
     public Placement getSelection() {
         List<Placement> selectedPlacements = getSelections();
         if (selectedPlacements.isEmpty()) {

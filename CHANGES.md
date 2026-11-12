@@ -22,6 +22,7 @@ a complete change list, only those that may directly interest or affect users.
 * Some keyboard shortcuts used to move the machine are also commonly used for text editing. Prevent accidental movement by block the machine movement action if a text edit field is focussed. [PR1928](https://github.com/openpnp/openpnp/pull/1928)
 * ReferencePushPullFeeder - an optional delay at each step of the movement [PR 1934](https://github.com/openpnp/openpnp/pull/1934)
 * Move Up / Move Down buttons in the Parts, Packages and Feeders tables to reorder entries. The order is persisted in the configuration files. Ported from the Qihe TVM802B fork.
+* The package footprint preview on the Packages panel Vision tab now rotates with the selected job placement, so the drawn pads match the component orientation on the PCB.
 * Changes for scripting:
     * A new "Job.Error" script. [PR 1889](https://github.com/openpnp/openpnp/pull/1889)
     * A new "Feeder.Fault" script. [PR 1898](https://github.com/openpnp/openpnp/pull/1898)

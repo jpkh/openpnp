@@ -36,6 +36,7 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
@@ -44,12 +45,14 @@ import javax.swing.table.DefaultTableCellRenderer;
 import org.jdesktop.beansbinding.AutoBinding.UpdateStrategy;
 import org.openpnp.Translations;
 import org.jdesktop.beansbinding.Converter;
+import org.openpnp.events.PlacementSelectedEvent;
+import org.openpnp.gui.JobPanel;
+import org.openpnp.gui.JobPlacementsPanel;
 import org.openpnp.gui.MainFrame;
 import org.openpnp.gui.components.AutoSelectTextTable;
 import org.openpnp.gui.components.CameraView;
 import org.openpnp.gui.components.ComponentDecorators;
 import org.openpnp.gui.components.reticle.FootprintReticle;
-import org.openpnp.gui.components.reticle.Reticle;
 import org.openpnp.gui.support.AbstractConfigurationWizard;
 import org.openpnp.gui.support.DoubleConverter;
 import org.openpnp.gui.support.Helpers;
@@ -62,9 +65,13 @@ import org.openpnp.model.Footprint.Generator;
 import org.openpnp.model.Footprint.Pad;
 import org.openpnp.model.LengthUnit;
 import org.openpnp.model.Package;
+import org.openpnp.model.Placement;
+import org.openpnp.model.PlacementsHolderLocation;
 import org.openpnp.spi.Camera;
 import org.openpnp.util.UiUtils;
+import org.openpnp.util.Utils2D;
 
+import com.google.common.eventbus.Subscribe;
 import com.jgoodies.forms.layout.ColumnSpec;
 import com.jgoodies.forms.layout.FormLayout;
 import com.jgoodies.forms.layout.FormSpecs;
@@ -77,6 +84,7 @@ public class PackageVisionWizard extends AbstractConfigurationWizard {
 
     final private Package pkg;
     final private Footprint footprint;
+    private FootprintReticle footprintReticle;
 
     public PackageVisionWizard(Package pkg) {
         this.pkg = pkg;
@@ -249,6 +257,9 @@ public class PackageVisionWizard extends AbstractConfigurationWizard {
         tablePanel.add(tableScrollPane);
 
         showReticle();
+        applySelectedPlacementRotation();
+
+        Configuration.get().getBus().register(this);
     }
 
     private void showReticle() {
@@ -269,8 +280,61 @@ public class PackageVisionWizard extends AbstractConfigurationWizard {
             return;
         }
         cameraView.removeReticle(PackageVisionWizard.class.getName());
-        Reticle reticle = new FootprintReticle(footprint);
-        cameraView.setReticle(PackageVisionWizard.class.getName(), reticle);
+        if (footprintReticle == null) {
+            footprintReticle = new FootprintReticle(footprint);
+        }
+        cameraView.setReticle(PackageVisionWizard.class.getName(), footprintReticle);
+    }
+
+    /**
+     * Applies the rotation of the currently selected job placement (if any) to the footprint
+     * reticle, so the drawn footprint matches the component orientation on the PCB. Without a
+     * selection the footprint is drawn unrotated, as taught in the package.
+     */
+    private void applySelectedPlacementRotation() {
+        double rotation = 0;
+        JobPanel jobPanel = MainFrame.get().getJobTab();
+        if (jobPanel != null && jobPanel.getJob() != null) {
+            JobPlacementsPanel jobPlacementsPanel = jobPanel.getJobPlacementsPanel();
+            Placement placement = jobPlacementsPanel.getSelection();
+            PlacementsHolderLocation<?> placementsHolderLocation = jobPlacementsPanel.getBoardOrPanelLocation();
+            if (placement != null && placementsHolderLocation != null) {
+                rotation = Utils2D.calculateBoardPlacementLocation(placementsHolderLocation,
+                        placement.getLocation()).getRotation();
+            }
+        }
+        if (footprintReticle != null) {
+            footprintReticle.setPlacementRotation(rotation);
+        }
+    }
+
+    @Subscribe
+    public void placementSelectedEventHandler(PlacementSelectedEvent event) {
+        double rotation = 0;
+        if (event.placement != null && event.placementsHolderLocation != null) {
+            // Combine the placement and board rotation so the drawn footprint matches the
+            // component orientation on the PCB.
+            rotation = Utils2D.calculateBoardPlacementLocation(event.placementsHolderLocation,
+                    event.placement.getLocation()).getRotation();
+        }
+        final double rotationFinal = rotation;
+        SwingUtilities.invokeLater(() -> {
+            if (footprintReticle != null) {
+                footprintReticle.setPlacementRotation(rotationFinal);
+            }
+            for (Camera camera : Configuration.get().getMachine().getCameras()) {
+                CameraView cameraView = MainFrame.get().getCameraViews().getCameraView(camera);
+                if (cameraView != null) {
+                    cameraView.repaint();
+                }
+            }
+        });
+    }
+
+    @Override
+    public void dispose() {
+        Configuration.get().getBus().unregister(this);
+        super.dispose();
     }
 
     private Pad getSelectedPad() {
